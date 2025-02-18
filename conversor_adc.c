@@ -31,7 +31,7 @@
 #define SQUARE_SIZE 8
 
 // variaveis globais
-volatile bool pwm_enabled = false;// armazena o estado de todos os leds conforme enunciado
+volatile bool pwm_enabled = true;// armazena o estado de todos os leds conforme enunciado
 volatile bool led_green_state = false; // variavel que armazena o estado do led verde
 
 int border_style = 0; //variavel que armazena o estilo das bordas que aparecem no display ssd1306
@@ -107,11 +107,11 @@ void gpio_setup(){
     gpio_pull_up(BUTTON_A_PIN);
 }
 
-void update_display(ssd1306_t *ssd, uint16_t vx_value, uint16_t vy_value, uint8_t *border_style) {
+void update_display(ssd1306_t *ssd, uint16_t vx_value, uint16_t vy_value, int *border_style) {
     int i;
     // Inverte os eixos para uma melhor estética no display
     uint8_t square_x = (vy_value * (DISPLAY_WIDTH - SQUARE_SIZE)) / 4095;
-    uint8_t square_y = (vx_value * (DISPLAY_HEIGHT - SQUARE_SIZE)) / 4095;
+    uint8_t square_y = ((4095 - vx_value) * (DISPLAY_HEIGHT - SQUARE_SIZE)) / 4095; // eixo x invertido para ficar apresentavel no display
 
     // Limpa o display preenchendo toda a RAM do display com 0 (apagando todos os pixels)
     ssd1306_fill(ssd, false);
@@ -128,15 +128,15 @@ void update_display(ssd1306_t *ssd, uint16_t vx_value, uint16_t vy_value, uint8_
             ssd1306_rect(ssd, 2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, true, false);
             break;
         case 2:
-            // desenho borda pontilhada
-            for (i = 0; i < DISPLAY_WIDTH; i += 4) {
+            // desenho borda pontilhada (pontos de 4 em 4 pixels)
+            for (i = 0; i < DISPLAY_WIDTH; i += 4) { // desenha no eixo x
                 ssd1306_pixel(ssd, i, 0, true);
                 ssd1306_pixel(ssd, i, DISPLAY_HEIGHT - 1, true);
             }
-            // for (i = 0; i < DISPLAY_HEIGHT; i += 4) {
-            //     ssd1306_pixel(ssd, 0, i, true);
-            //     ssd1306_pixel(ssd, DISPLAY_WIDTH - 1, i, true);
-            // }
+            for (i = 0; i < DISPLAY_HEIGHT; i += 4) { //desenha no eixo y
+                ssd1306_pixel(ssd, 0, i, true);
+                ssd1306_pixel(ssd, DISPLAY_WIDTH - 1, i, true);
+            }
             break;
         default:
             // faz com que a bordas se repitam
@@ -158,20 +158,24 @@ void update_display(ssd1306_t *ssd, uint16_t vx_value, uint16_t vy_value, uint8_
 void pwm_leds_config(uint16_t vx_value,uint16_t vy_value){
         uint green_led_brightness = led_green_state ? 4095 : 0;
         pwm_set_gpio_level(LED_GREEN_PIN, green_led_brightness);
-        
-        if(pwm_enabled){ // caso botao A for pressionado todos os leds vao acender ou apagar
+        // leds recebem valores de intensidade (controlado por pwm) do joystick conforme sua posição
+        pwm_set_gpio_level(LED_RED_PIN, vy_value);
+        pwm_set_gpio_level(LED_BLUE_PIN, vx_value);
+
+        // limite de wrap para o led ficar apagado conforme enunciado do projeto (wrap de 2048 - leds apagados)
+        // coloquei wrap num intervalo pois meu joystick nao esta calibrado ficando entre 2000 e 2300 (com folga de 100 nos limites para o projeto ficar apresentavel)
+        // if(vy_value > 2000 && vy_value < 2300) pwm_set_gpio_level(LED_RED_PIN, 0);
+        // if(vx_value > 2000 && vx_value < 2300) pwm_set_gpio_level(LED_BLUE_PIN, 0);  
+
+        //limite de wrap conforme enunciado
+        if(vy_value == 2048) pwm_set_gpio_level(LED_RED_PIN, 0);
+        if(vx_value == 2048) pwm_set_gpio_level(LED_BLUE_PIN, 0);  
+
+        if(!pwm_enabled){ // caso botao A for pressionado todos os leds vao acender ou apagar
             pwm_set_gpio_level(LED_RED_PIN, 4095);
             pwm_set_gpio_level(LED_BLUE_PIN, 4095);
             pwm_set_gpio_level(LED_GREEN_PIN, 4095);
-        } else { // 
-            // leds recebem valores de intensidade (controlado por pwm) do joystick conforme sua posição
-            pwm_set_gpio_level(LED_RED_PIN, vy_value);
-            pwm_set_gpio_level(LED_BLUE_PIN, vx_value);
-            // limite de wrap para o led ficar apagado conforme enunciado do projeto (wrap de 2048 - leds apagados)
-            // coloquei wrap num intervalo pois meu joystick nao esta calibrado ficando entre 2000 e 2300 (com folga de 100 nos limites para o projeto ficar apresentavel)
-            if(vy_value > 2000 && vy_value < 2300) pwm_set_gpio_level(LED_RED_PIN, 0);
-            if(vx_value > 2000 && vx_value < 2300) pwm_set_gpio_level(LED_BLUE_PIN, 0);  
-        }
+        } 
 }
 
 
